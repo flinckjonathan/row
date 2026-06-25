@@ -863,11 +863,21 @@ document.getElementById('shortcutBody').innerHTML = `
       Method: <strong>POST</strong><br>
       URL: <span style="color:var(--ring-steps);font-family:var(--font-mono);font-size:11px">${endpointURL}</span>
       <button class="copy-btn" id="copyURL" type="button">Copy URL</button><br><br>
-      Headers:
-      <div class="code-block">apikey: ${SUPABASE_KEY}
-Authorization: Bearer ${SUPABASE_KEY}
-Content-Type: application/json
-Prefer: resolution=merge-duplicates</div>
+      Headers — tap each button to copy, then paste into Shortcut:
+      <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+        <div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px;letter-spacing:.08em">apikey &amp; Authorization: Bearer</div>
+          <div class="code-block" id="keyBlock" style="word-break:break-all">${SUPABASE_KEY}</div>
+          <button class="copy-btn" id="copyKey" type="button">Copy API key</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);line-height:1.6">
+          Add two headers:<br>
+          • <code style="color:var(--ring-steps)">apikey</code> → paste key<br>
+          • <code style="color:var(--ring-steps)">Authorization</code> → type <code style="color:var(--ring-steps)">Bearer </code> then paste key<br>
+          • <code style="color:var(--ring-steps)">Content-Type</code> → <code style="color:var(--ring-steps)">application/json</code><br>
+          • <code style="color:var(--ring-steps)">Prefer</code> → <code style="color:var(--ring-steps)">resolution=merge-duplicates</code>
+        </div>
+      </div>
       Body (JSON — replace values with your Shortcut variables):
       <div class="code-block">${sampleBody.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
     </div>
@@ -889,6 +899,13 @@ document.getElementById('copyURL').addEventListener('click', function() {
     var btn = document.getElementById('copyURL');
     btn.textContent = 'Copied!';
     setTimeout(function() { btn.textContent = 'Copy URL'; }, 2000);
+  });
+});
+document.getElementById('copyKey').addEventListener('click', function() {
+  navigator.clipboard.writeText(SUPABASE_KEY).then(function() {
+    var btn = document.getElementById('copyKey');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy API key'; }, 2000);
   });
 });
 
