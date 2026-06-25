@@ -933,17 +933,7 @@ async function mergeShortcutData() {
       return;
     }
 
-    let ds = todayStr();
-    if (inc.date) {
-      const parsed = new Date(inc.date);
-      ds = isNaN(parsed) ? inc.date : (parsed.getFullYear() + '-' +
-        String(parsed.getMonth()+1).padStart(2,'0') + '-' +
-        String(parsed.getDate()).padStart(2,'0'));
-    }
-    if (ds !== todayStr() && ds !== dateStr(-1)) {
-      setSub('Watch data is from ' + ds + ' (not today/yesterday)');
-      return;
-    }
+    const ds = todayStr();
 
     const patch = {};
     if (inc.steps)      patch.steps      = Number(inc.steps);
