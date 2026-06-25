@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#050506">
+<title>Watch · Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="sync.js" defer></script>
+<script src="topbar.js" defer></script>
+<style>
+:root {
+  --text-primary: #FAFAFA;
+  --text-secondary: #B8B6B0;
+  --text-tertiary: #76746E;
+  --success: #6BE3A4;
+  --warning: #F2C063;
+  --danger: #FF6B6B;
+  --ring-steps:  #5AC8FA;
+  --ring-sleep:  #BF7FFF;
+  --ring-active: #6BE3A4;
+  --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #050506;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  padding: max(28px, env(safe-area-inset-top)) 20px 60px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 78% 12%, rgba(90, 200, 250, 0.13), transparent 45%),
+    radial-gradient(circle at 18% 88%, rgba(107, 227, 164, 0.08), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none; z-index: -2;
+  animation: drift 36s ease-in-out infinite alternate;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(255,255,255,0.014) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none; z-index: -1;
+}
+@keyframes drift {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-22px, 14px, 0); }
+}
+
+.page { max-width: 760px; margin: 0 auto; }
+
+.dash-title {
+  margin: 0 0 4px;
+  font-size: 28px; font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #FFFFFF 0%, #C7C4BC 120%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
+.dash-sub {
+  font-size: 12px; color: var(--text-tertiary); margin: 0 0 20px;
+  min-height: 18px;
+}
+
+.section { margin-top: 8px; }
+.section-title {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px;
+}
+.section-title::before {
+  content: ''; width: 18px; height: 1px;
+  background: var(--text-tertiary); opacity: 0.6;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08), transparent);
+}
+
+.gm-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  backdrop-filter: blur(24px) saturate(1.2);
+  -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+/* ── Date navigator ── */
+.date-nav {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+}
+.date-btn {
+  width: 32px; height: 32px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; color: var(--text-secondary);
+  font-size: 18px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+.date-btn:hover { background: rgba(255,255,255,0.08); }
+.date-btn:disabled { opacity: 0.25; cursor: default; }
+.date-label {
+  flex: 1; text-align: center;
+  font-size: 13px; font-weight: 600; color: var(--text-primary);
+}
+
+/* ── Activity rings ── */
+.rings-row {
+  display: flex; justify-content: space-around;
+  align-items: flex-start; gap: 8px; padding: 4px 0 16px;
+}
+.ring-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ring-container { position: relative; width: 96px; height: 96px; }
+.ring-container svg { width: 96px; height: 96px; }
+.ring-label-wrap {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none;
+}
+.ring-val {
+  font-size: 17px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary); line-height: 1;
+}
+.ring-unit {
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary); margin-top: 2px;
+}
+.ring-name {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.ring-goal { font-size: 10px; color: var(--text-tertiary); opacity: 0.6; }
+
+/* ── Supplementary metrics ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 10px; margin-top: 0;
+}
+.stat {
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px; padding: 12px;
+}
+.stat-num {
+  font-size: 22px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em; color: var(--text-primary); line-height: 1;
+}
+.stat-label {
+  margin-top: 5px;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ── Log forms ── */
+.log-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: 1fr 1fr;
+}
+.log-field { display: flex; flex-direction: column; gap: 5px; }
+.log-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.log-input {
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; background: rgba(0,0,0,0.28);
+  color: var(--text-primary);
+  font-family: inherit; font-size: 14px; outline: none;
+  -webkit-appearance: none;
+  transition: border-color 0.2s;
+}
+.log-input:focus { border-color: rgba(255,255,255,0.28); }
+.log-input::placeholder { color: var(--text-tertiary); }
+.log-actions {
+  display: flex; gap: 8px; margin-top: 14px;
+  padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── Big metric display (reused in sleep + steps) ── */
+.big-val {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px;
+}
+.big-num {
+  font-size: 40px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em; color: var(--text-primary); line-height: 1;
+}
+.big-unit { font-size: 16px; color: var(--text-tertiary); }
+.big-detail { font-size: 12px; color: var(--text-tertiary); margin-bottom: 14px; }
+
+/* Progress bar */
+.bar-wrap { margin: 10px 0 4px; }
+.bar-track {
+  height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.07); overflow: hidden;
+}
+.bar-fill { height: 100%; border-radius: 3px; }
+.bar-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-tertiary); margin-top: 4px;
+}
+
+/* ── Buttons ── */
+.gm-add {
+  padding: 11px 20px; border: 0; border-radius: 12px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #E8E5DD 100%);
+  color: #0A0A0B; font-family: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    0 2px 8px rgba(0,0,0,0.35),
+    0 8px 22px rgba(0,0,0,0.25);
+  transition: transform 0.1s, filter 0.15s;
+}
+.gm-add:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.gm-add:active { transform: translateY(0); }
+
+.gm-ghost {
+  padding: 11px 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px; background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+  font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gm-ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+
+/* ── Workout list ── */
+.workout-list { list-style: none; margin: 0 0 14px; padding: 0; }
+.workout-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 6px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+}
+.workout-icon {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  background: rgba(107,227,164,0.08);
+  border: 1px solid rgba(107,227,164,0.12);
+}
+.workout-info { flex: 1; min-width: 0; }
+.workout-type { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.workout-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+.workout-kcal {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  color: var(--success); flex-shrink: 0;
+}
+.workout-del {
+  border: 0; background: transparent; color: var(--text-tertiary);
+  font-size: 18px; cursor: pointer; padding: 0 4px;
+  opacity: 0.3; flex-shrink: 0;
+  transition: opacity 0.2s, color 0.2s;
+}
+.workout-row:hover .workout-del { opacity: 1; }
+.workout-del:hover { color: var(--danger); }
+
+/* ── 7-day history ── */
+.history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.history-table th {
+  text-align: left; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.history-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+}
+.history-table tr:last-child td { border-bottom: none; }
+.td-date { font-size: 11px; color: var(--text-tertiary); }
+.td-good { color: var(--success); font-weight: 700; }
+.td-warn { color: var(--warning); }
+.td-bad  { color: var(--danger);  }
+
+/* ── Shortcut setup ── */
+.setup-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.setup-caret { font-size: 11px; color: var(--text-tertiary); transition: transform 0.2s; }
+.setup-toggle[aria-expanded="true"] .setup-caret { transform: rotate(180deg); }
+.setup-body { display: none; margin-top: 18px; }
+.setup-body.open { display: block; }
+.setup-step { display: flex; gap: 12px; margin-bottom: 16px; }
+.step-num {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10);
+  font-size: 11px; font-weight: 700; color: var(--text-tertiary);
+}
+.step-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.step-desc { font-size: 12px; color: var(--text-tertiary); line-height: 1.6; }
+.code-block {
+  margin-top: 8px;
+  background: rgba(0,0,0,0.36);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; padding: 12px;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ring-steps); white-space: pre-wrap; word-break: break-all;
+}
+.copy-btn {
+  margin-top: 6px; padding: 6px 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 8px; background: rgba(255,255,255,0.04);
+  color: var(--text-tertiary); font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.copy-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.setup-note {
+  margin-top: 4px; padding: 12px;
+  background: rgba(90,200,250,0.06);
+  border: 1px solid rgba(90,200,250,0.14);
+  border-radius: 10px; font-size: 12px; color: var(--text-tertiary); line-height: 1.6;
+}
+
+/* ── Sync badge ── */
+.sync-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  background: rgba(107,227,164,0.10);
+  border: 1px solid rgba(107,227,164,0.18);
+  color: var(--success); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.sync-badge::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--success); animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+.empty-state {
+  text-align: center; font-size: 12px; font-style: italic;
+  color: var(--text-tertiary); padding: 14px 0;
+}
+
+@media (max-width: 480px) {
+  body { padding: max(20px, env(safe-area-inset-top)) 14px 50px; }
+  .gm-card { padding: 16px; }
+  .ring-container { width: 80px; height: 80px; }
+  .ring-container svg { width: 80px; height: 80px; }
+  .ring-val { font-size: 15px; }
+  .big-num { font-size: 32px; }
+  .log-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1 class="dash-title">Apple Watch</h1>
+  <p class="dash-sub" id="dashSub">Loading…</p>
+
+  <div class="date-nav">
+    <button class="date-btn" id="btnPrev">&#8249;</button>
+    <div class="date-label" id="dateLabel">Today</div>
+    <button class="date-btn" id="btnNext" disabled>&#8250;</button>
+  </div>
+
+  <!-- ── Activity rings ── -->
+  <div class="section">
+    <div class="section-title">Activity Rings</div>
+    <div class="gm-card">
+      <div class="rings-row" id="ringsRow"></div>
+      <div class="stat-grid" id="statsRow"></div>
+    </div>
+  </div>
+
+  <!-- ── Sleep ── -->
+  <div class="section">
+    <div class="section-title">Sleep</div>
+    <div class="gm-card">
+      <div id="sleepSummary"></div>
+      <div class="log-grid">
+        <div class="log-field">
+          <label class="log-label" for="inBed">Bedtime</label>
+          <input class="log-input" id="inBed" type="time">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inWake">Wake time</label>
+          <input class="log-input" id="inWake" type="time">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inSleepQ">Quality (1–5)</label>
+          <input class="log-input" id="inSleepQ" type="number" min="1" max="5" placeholder="4">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inHRV">HRV (ms, optional)</label>
+          <input class="log-input" id="inHRV" type="number" placeholder="45">
+        </div>
+      </div>
+      <div class="log-actions">
+        <button class="gm-add" id="btnSaveSleep" type="button">Save Sleep</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Steps & Activity ── -->
+  <div class="section">
+    <div class="section-title">Steps &amp; Activity</div>
+    <div class="gm-card">
+      <div id="stepsSummary"></div>
+      <div class="log-grid">
+        <div class="log-field">
+          <label class="log-label" for="inSteps">Steps</label>
+          <input class="log-input" id="inSteps" type="number" placeholder="10 000">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inActiveMin">Exercise min</label>
+          <input class="log-input" id="inActiveMin" type="number" placeholder="30">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inStandHrs">Stand hours</label>
+          <input class="log-input" id="inStandHrs" type="number" placeholder="12">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inRestHR">Resting HR</label>
+          <input class="log-input" id="inRestHR" type="number" placeholder="62">
+        </div>
+      </div>
+      <div class="log-actions">
+        <button class="gm-add" id="btnSaveActivity" type="button">Save Activity</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Workouts ── -->
+  <div class="section">
+    <div class="section-title">Workouts</div>
+    <div class="gm-card">
+      <ul class="workout-list" id="workoutList"></ul>
+      <div class="log-grid">
+        <div class="log-field">
+          <label class="log-label" for="inWType">Type</label>
+          <input class="log-input" id="inWType" type="text" placeholder="Outdoor Run">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inWDur">Duration (min)</label>
+          <input class="log-input" id="inWDur" type="number" placeholder="30">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inWKcal">Calories</label>
+          <input class="log-input" id="inWKcal" type="number" placeholder="280">
+        </div>
+        <div class="log-field">
+          <label class="log-label" for="inWHR">Avg heart rate</label>
+          <input class="log-input" id="inWHR" type="number" placeholder="145">
+        </div>
+      </div>
+      <div class="log-actions">
+        <button class="gm-add" id="btnAddWorkout" type="button">Log Workout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7-day history ── -->
+  <div class="section">
+    <div class="section-title">7-Day History</div>
+    <div class="gm-card" id="historyCard"></div>
+  </div>
+
+  <!-- ── iOS Shortcut ── -->
+  <div class="section">
+    <div class="section-title">Auto-sync from iPhone</div>
+    <div class="gm-card">
+      <div class="setup-toggle" id="shortcutToggle" aria-expanded="false">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary)">
+            Connect Apple Watch via Shortcut
+          </div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-top:3px">
+            Push Health data here automatically every morning
+          </div>
+        </div>
+        <span class="setup-caret">&#9660;</span>
+      </div>
+      <div class="setup-body" id="shortcutBody"></div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<script>
+(function () {
+'use strict';
+
+const STORE_KEY   = 'watch_v1';
+const IN_KEY      = 'watch_in_synced_at'; // tracks last Shortcut merge
+const SUPABASE_URL = 'https://yhnouevrwaiibieqfgsz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_WTuWAd9c_2ugrBX4Syy6xA_AVgpPlMM';
+const GOAL_STEPS  = 10000;
+const GOAL_SLEEP  = 8;
+const GOAL_ACTIVE = 30;
+
+// ── Date helpers ────────────────────────────────────────────────
+let viewOffset = 0;
+
+function dateStr(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + (offset || 0));
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+function todayStr() { return dateStr(0); }
+function viewDate() { return dateStr(viewOffset); }
+function viewLabel() {
+  if (viewOffset === 0)  return 'Today';
+  if (viewOffset === -1) return 'Yesterday';
+  const d = new Date(); d.setDate(d.getDate() + viewOffset);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// ── Data ────────────────────────────────────────────────────────
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { logs: {} }; }
+  catch(e) { return { logs: {} }; }
+}
+function save(data) { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+function getLog(ds) { return (load().logs[ds]) || {}; }
+function patchLog(ds, patch) {
+  const data = load();
+  data.logs[ds] = Object.assign({}, data.logs[ds] || {}, patch);
+  save(data);
+}
+
+// ── SVG ring ────────────────────────────────────────────────────
+// R=36 fits inside a 96×96 viewBox with stroke-width=10 and gives
+// a circumference that keeps the arc-math simple.
+function ringsvg(pct, color) {
+  const R = 36, C = 2 * Math.PI * R;
+  const arc = Math.min(1, Math.max(0, pct)) * C;
+  return `<svg viewBox="0 0 96 96">
+    <circle cx="48" cy="48" r="${R}" fill="none"
+      stroke="rgba(255,255,255,0.07)" stroke-width="10"/>
+    <circle cx="48" cy="48" r="${R}" fill="none"
+      stroke="${color}" stroke-width="10"
+      stroke-dasharray="${arc.toFixed(2)} ${C.toFixed(2)}"
+      stroke-dashoffset="${(C * 0.25).toFixed(2)}"
+      stroke-linecap="round"/>
+  </svg>`;
+}
+
+// ── Render ──────────────────────────────────────────────────────
+function render() {
+  document.getElementById('dateLabel').textContent = viewLabel();
+  document.getElementById('btnNext').disabled = viewOffset >= 0;
+  const log = getLog(viewDate());
+  renderRings(log);
+  renderSleep(log);
+  renderSteps(log);
+  renderWorkouts(log);
+  renderHistory();
+}
+
+function renderRings(log) {
+  const steps  = log.steps     || 0;
+  const sleep  = log.sleepHours || 0;
+  const active = log.activeMin  || 0;
+
+  const stepsK = steps >= 1000 ? (steps/1000).toFixed(1)+'k' : (steps || '—');
+
+  document.getElementById('ringsRow').innerHTML =
+    ringCard(stepsK,  'steps',  steps/GOAL_STEPS,  GOAL_STEPS.toLocaleString()+' goal', 'var(--ring-steps)') +
+    ringCard(sleep || '—', 'hrs',  sleep/GOAL_SLEEP,  GOAL_SLEEP+'h goal',               'var(--ring-sleep)') +
+    ringCard(active || '—','min', active/GOAL_ACTIVE, GOAL_ACTIVE+'min goal',             'var(--ring-active)');
+
+  const extras = [];
+  if (log.restHR)    extras.push(`<div class="stat"><div class="stat-num">${log.restHR}</div><div class="stat-label">Resting HR</div></div>`);
+  if (log.hrv)       extras.push(`<div class="stat"><div class="stat-num">${log.hrv}</div><div class="stat-label">HRV (ms)</div></div>`);
+  if (log.standHrs)  extras.push(`<div class="stat"><div class="stat-num">${log.standHrs}</div><div class="stat-label">Stand hours</div></div>`);
+  document.getElementById('statsRow').innerHTML = extras.join('');
+}
+
+function ringCard(val, unit, pct, goalLabel, color) {
+  return `<div class="ring-wrap">
+    <div class="ring-container">
+      ${ringsvg(pct, color)}
+      <div class="ring-label-wrap">
+        <div class="ring-val">${val}</div>
+        <div class="ring-unit">${unit}</div>
+      </div>
+    </div>
+    <div class="ring-goal">${goalLabel}</div>
+  </div>`;
+}
+
+function renderSleep(log) {
+  const el = document.getElementById('sleepSummary');
+  if (log.sleepHours) {
+    const q = log.sleepQuality || 0;
+    const stars = q ? '<span style="color:var(--ring-sleep)">' + '★'.repeat(q) + '<span style="opacity:.3">' + '★'.repeat(5-q) + '</span></span>' : '';
+    const detail = [
+      log.bedtime && log.wake ? log.bedtime + ' → ' + log.wake : '',
+      log.hrv ? 'HRV ' + log.hrv + ' ms' : ''
+    ].filter(Boolean).join(' · ');
+    el.innerHTML = `
+      <div class="big-val">
+        <span class="big-num">${log.sleepHours.toFixed(1)}</span>
+        <span class="big-unit">hrs</span>
+        ${stars}
+      </div>
+      ${detail ? `<div class="big-detail">${detail}</div>` : ''}`;
+  } else {
+    el.innerHTML = '';
+  }
+  if (log.bedtime) document.getElementById('inBed').value  = log.bedtime;
+  if (log.wake)    document.getElementById('inWake').value = log.wake;
+  if (log.sleepQuality) document.getElementById('inSleepQ').value = log.sleepQuality;
+  if (log.hrv)     document.getElementById('inHRV').value  = log.hrv;
+}
+
+function renderSteps(log) {
+  const el = document.getElementById('stepsSummary');
+  if (log.steps) {
+    const pct = Math.min(1, log.steps / GOAL_STEPS);
+    const fillColor = pct >= 1 ? 'var(--success)' : pct >= 0.6 ? 'var(--ring-steps)' : 'var(--warning)';
+    el.innerHTML = `
+      <div class="big-val">
+        <span class="big-num">${log.steps.toLocaleString()}</span>
+        <span class="big-unit">/ ${GOAL_STEPS.toLocaleString()} steps</span>
+      </div>
+      <div class="bar-wrap">
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${(pct*100).toFixed(1)}%;background:${fillColor}"></div>
+        </div>
+        <div class="bar-labels"><span>${Math.round(pct*100)}%</span><span>${GOAL_STEPS.toLocaleString()}</span></div>
+      </div>`;
+  } else {
+    el.innerHTML = '';
+  }
+  if (log.steps)     document.getElementById('inSteps').value    = log.steps;
+  if (log.activeMin) document.getElementById('inActiveMin').value = log.activeMin;
+  if (log.standHrs)  document.getElementById('inStandHrs').value  = log.standHrs;
+  if (log.restHR)    document.getElementById('inRestHR').value    = log.restHR;
+}
+
+const ICONS = { run:'🏃', walk:'🚶', cycle:'🚴', bike:'🚴', swim:'🏊',
+  hike:'🥾', yoga:'🧘', strength:'🏋️', gym:'🏋️', hiit:'⚡',
+  climb:'🧗', ski:'⛷️', row:'🚣', tennis:'🎾', basketball:'🏀' };
+function wIcon(type) {
+  if (!type) return '💪';
+  const t = type.toLowerCase();
+  for (const k of Object.keys(ICONS)) { if (t.includes(k)) return ICONS[k]; }
+  return '💪';
+}
+
+function renderWorkouts(log) {
+  const ul = document.getElementById('workoutList');
+  const ws = log.workouts || [];
+  if (!ws.length) {
+    ul.innerHTML = '<li class="empty-state">No workouts logged yet.</li>';
+    return;
+  }
+  ul.innerHTML = '';
+  ws.forEach(function(w, i) {
+    const li = document.createElement('li');
+    li.className = 'workout-row';
+    const meta = [w.duration ? w.duration+'min' : '', w.heartRate ? w.heartRate+' bpm' : ''].filter(Boolean).join(' · ');
+    li.innerHTML = `
+      <div class="workout-icon">${wIcon(w.type)}</div>
+      <div class="workout-info">
+        <div class="workout-type">${w.type || 'Workout'}</div>
+        ${meta ? `<div class="workout-meta">${meta}</div>` : ''}
+      </div>
+      ${w.calories ? `<div class="workout-kcal">${w.calories} kcal</div>` : ''}
+      <button class="workout-del" type="button">×</button>`;
+    li.querySelector('.workout-del').addEventListener('click', function() {
+      const d = load();
+      const ds = viewDate();
+      d.logs[ds] = d.logs[ds] || {};
+      d.logs[ds].workouts = (d.logs[ds].workouts || []).filter(function(_,j){ return j !== i; });
+      save(d); render();
+    });
+    ul.appendChild(li);
+  });
+}
+
+function renderHistory() {
+  const card = document.getElementById('historyCard');
+  const data = load();
+  const rows = [];
+  for (let i = 0; i >= -6; i--) {
+    const ds = dateStr(i);
+    rows.push({ ds: ds, log: data.logs[ds] || {} });
+  }
+  const hasAny = rows.some(function(r){ return r.log.steps || r.log.sleepHours || r.log.activeMin; });
+  if (!hasAny) {
+    card.innerHTML = '<div class="empty-state">No history yet — start logging above.</div>';
+    return;
+  }
+  const trs = rows.map(function(r) {
+    const { ds, log } = r;
+    const d = new Date(ds + 'T12:00:00');
+    const label = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    const stepsV = log.steps ? log.steps.toLocaleString() : '—';
+    const stepsCls = log.steps ? (log.steps >= GOAL_STEPS ? 'td-good' : log.steps >= 6000 ? '' : 'td-warn') : '';
+    const sleepV = log.sleepHours ? log.sleepHours.toFixed(1)+'h' : '—';
+    const sleepCls = log.sleepHours ? (log.sleepHours >= GOAL_SLEEP ? 'td-good' : log.sleepHours >= 6 ? 'td-warn' : 'td-bad') : '';
+    const activeV = log.activeMin ? log.activeMin+'m' : '—';
+    const activeCls = log.activeMin ? (log.activeMin >= GOAL_ACTIVE ? 'td-good' : 'td-warn') : '';
+    const wc = (log.workouts || []).length;
+    return `<tr><td class="td-date">${label}</td>
+      <td class="${stepsCls}">${stepsV}</td>
+      <td class="${sleepCls}">${sleepV}</td>
+      <td class="${activeCls}">${activeV}</td>
+      <td>${wc || '—'}</td></tr>`;
+  }).join('');
+  card.innerHTML = `<table class="history-table">
+    <thead><tr>
+      <th>Date</th><th>Steps</th><th>Sleep</th><th>Active</th><th>Workouts</th>
+    </tr></thead>
+    <tbody>${trs}</tbody>
+  </table>`;
+}
+
+// ── Sleep hour calc ──────────────────────────────────────────────
+function calcSleepHours(bed, wake) {
+  if (!bed || !wake) return null;
+  const [bh, bm] = bed.split(':').map(Number);
+  const [wh, wm] = wake.split(':').map(Number);
+  let mins = (wh * 60 + wm) - (bh * 60 + bm);
+  if (mins <= 0) mins += 24 * 60;
+  return Math.round(mins / 6) / 10;
+}
+
+// ── Event handlers ───────────────────────────────────────────────
+document.getElementById('btnPrev').addEventListener('click', function() {
+  if (viewOffset > -30) { viewOffset--; render(); }
+});
+document.getElementById('btnNext').addEventListener('click', function() {
+  if (viewOffset < 0) { viewOffset++; render(); }
+});
+
+document.getElementById('btnSaveSleep').addEventListener('click', function() {
+  const bed  = document.getElementById('inBed').value;
+  const wake = document.getElementById('inWake').value;
+  const q    = parseInt(document.getElementById('inSleepQ').value) || 0;
+  const hrv  = parseInt(document.getElementById('inHRV').value) || 0;
+  const hours = calcSleepHours(bed, wake);
+  const patch = {};
+  if (bed)   patch.bedtime = bed;
+  if (wake)  patch.wake = wake;
+  if (hours) patch.sleepHours = hours;
+  if (q)     patch.sleepQuality = q;
+  if (hrv)   patch.hrv = hrv;
+  if (Object.keys(patch).length) { patchLog(viewDate(), patch); render(); }
+});
+
+document.getElementById('btnSaveActivity').addEventListener('click', function() {
+  const steps  = parseInt(document.getElementById('inSteps').value) || 0;
+  const active = parseInt(document.getElementById('inActiveMin').value) || 0;
+  const stand  = parseInt(document.getElementById('inStandHrs').value);
+  const rhr    = parseInt(document.getElementById('inRestHR').value) || 0;
+  const patch  = {};
+  if (steps)          patch.steps = steps;
+  if (active)         patch.activeMin = active;
+  if (stand > 0)      patch.standHrs = stand;
+  if (rhr)            patch.restHR = rhr;
+  if (Object.keys(patch).length) { patchLog(viewDate(), patch); render(); }
+});
+
+document.getElementById('btnAddWorkout').addEventListener('click', function() {
+  const type = document.getElementById('inWType').value.trim();
+  const dur  = parseInt(document.getElementById('inWDur').value) || 0;
+  const kcal = parseInt(document.getElementById('inWKcal').value) || 0;
+  const hr   = parseInt(document.getElementById('inWHR').value) || 0;
+  if (!type && !dur) return;
+  const w = { type: type || 'Workout' };
+  if (dur)  w.duration  = dur;
+  if (kcal) w.calories  = kcal;
+  if (hr)   w.heartRate = hr;
+  const ds = viewDate();
+  const data = load();
+  data.logs[ds] = data.logs[ds] || {};
+  data.logs[ds].workouts = (data.logs[ds].workouts || []).concat([w]);
+  save(data);
+  ['inWType','inWDur','inWKcal','inWHR'].forEach(function(id) { document.getElementById(id).value = ''; });
+  render();
+});
+
+// ── Shortcut setup ───────────────────────────────────────────────
+document.getElementById('shortcutToggle').addEventListener('click', function() {
+  const open = this.getAttribute('aria-expanded') === 'true';
+  this.setAttribute('aria-expanded', String(!open));
+  document.getElementById('shortcutBody').classList.toggle('open', !open);
+});
+
+const endpointURL = SUPABASE_URL + '/rest/v1/app_state?on_conflict=key';
+const sampleBody  = JSON.stringify({
+  key: 'watch_in',
+  data: {
+    date: 'YYYY-MM-DD',
+    steps: 8432,
+    sleepHours: 7.5,
+    activeMin: 45,
+    restHR: 62,
+    bedtime: '23:00',
+    wake: '06:30'
+  },
+  updated_at: 'ISO timestamp'
+}, null, 2);
+
+document.getElementById('shortcutBody').innerHTML = `
+<div class="setup-step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <div class="step-title">Open Shortcuts on iPhone</div>
+    <div class="step-desc">Tap + to create a new Shortcut. Name it <em>Sync Watch</em>.</div>
+  </div>
+</div>
+<div class="setup-step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <div class="step-title">Add Health Sample actions</div>
+    <div class="step-desc">Add one "Find Health Samples" for each:<br>
+      Steps · Sum · Today<br>
+      Sleep Analysis · Sum of hours · Last night<br>
+      Apple Exercise Time · Sum · Today<br>
+      Resting Heart Rate · Average · Today
+    </div>
+  </div>
+</div>
+<div class="setup-step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <div class="step-title">Add "Get Contents of URL" action</div>
+    <div class="step-desc">
+      Method: <strong>POST</strong><br>
+      URL: <span style="color:var(--ring-steps);font-family:var(--font-mono);font-size:11px">${endpointURL}</span>
+      <button class="copy-btn" id="copyURL" type="button">Copy URL</button><br><br>
+      Headers:
+      <div class="code-block">apikey: ${SUPABASE_KEY}
+Authorization: Bearer ${SUPABASE_KEY}
+Content-Type: application/json
+Prefer: resolution=merge-duplicates</div>
+      Body (JSON — replace values with your Shortcut variables):
+      <div class="code-block">${sampleBody.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>
+  </div>
+</div>
+<div class="setup-step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <div class="step-title">Automate it (optional)</div>
+    <div class="step-desc">In Shortcuts → Automations, add Time of Day → 8:00 AM, run <em>Sync Watch</em>. Your metrics will appear here automatically each morning after your watch syncs overnight.</div>
+  </div>
+</div>
+<div class="setup-note">
+  The Shortcut writes to Supabase key <code style="color:var(--ring-steps)">watch_in</code>. This page reads it on load and merges any new data into your history automatically.
+</div>`;
+
+document.getElementById('copyURL').addEventListener('click', function() {
+  navigator.clipboard.writeText(endpointURL).then(function() {
+    var btn = document.getElementById('copyURL');
+    btn.textContent = 'Copied!';
+    setTimeout(function() { btn.textContent = 'Copy URL'; }, 2000);
+  });
+});
+
+// ── Pull Shortcut data from Supabase ────────────────────────────
+async function mergeShortcutData() {
+  if (!window.supabase) return;
+  try {
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { data } = await supa
+      .from('app_state').select('data,updated_at')
+      .eq('key','watch_in').maybeSingle();
+    if (!data || !data.data) return;
+
+    const lastSynced = localStorage.getItem(IN_KEY);
+    if (lastSynced === data.updated_at) return;
+
+    const inc = data.data;
+    const ds  = inc.date || todayStr();
+    if (ds !== todayStr() && ds !== dateStr(-1)) return;
+
+    const patch = {};
+    if (inc.steps)      patch.steps      = Number(inc.steps);
+    if (inc.sleepHours) patch.sleepHours = Number(inc.sleepHours);
+    if (inc.activeMin)  patch.activeMin  = Number(inc.activeMin);
+    if (inc.restHR)     patch.restHR     = Number(inc.restHR);
+    if (inc.bedtime)    patch.bedtime    = inc.bedtime;
+    if (inc.wake)       patch.wake       = inc.wake;
+    if (!Object.keys(patch).length) return;
+
+    patchLog(ds, patch);
+    localStorage.setItem(IN_KEY, data.updated_at);
+    render();
+    document.getElementById('dashSub').innerHTML = '<span class="sync-badge">Synced from Watch</span>';
+  } catch(e) {}
+}
+
+// ── Boot ────────────────────────────────────────────────────────
+render();
+mergeShortcutData();
+
+document.getElementById('dashSub').textContent = viewLabel();
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof initCloudSync !== 'function') return;
+  initCloudSync({
+    appKey: 'watch',
+    syncedKeys: [STORE_KEY],
+    onApplied: render
+  });
+});
+
+})();
+</script>
+</body>
+</html>

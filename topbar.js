@@ -191,6 +191,11 @@ body.topbar-modal-open {
     <span class="topbar-pill-dot"></span>
     <span class="topbar-pill-label">GYM</span>
   </a>
+  <a href="watch.html" class="topbar-pill" id="topbarWatch">
+    <span class="topbar-pill-dot"></span>
+    <span class="topbar-pill-label">WATCH</span>
+    <span class="topbar-pill-count" id="topbarWatchCount"></span>
+  </a>
   <a href="finance.html" class="topbar-pill" id="topbarFinance">
     <span class="topbar-pill-dot"></span>
     <span class="topbar-pill-label">FINANCE</span>
@@ -274,6 +279,16 @@ body.topbar-modal-open {
     return { done, total };
   }
 
+  function getWatchProgress() {
+    try {
+      const d = JSON.parse(localStorage.getItem('watch_v1')) || {};
+      const key = calendarDateKey();
+      const log = (d.logs || {})[key] || {};
+      if (!log.steps) return { text: '' };
+      return { text: log.steps >= 1000 ? (log.steps / 1000).toFixed(1) + 'k' : String(log.steps) };
+    } catch (e) { return { text: '' }; }
+  }
+
   function classifyStatus(done, total) {
     if (total === 0) return 'idle';
     if (done >= total) return 'good';
@@ -309,6 +324,9 @@ body.topbar-modal-open {
     setPillStatus(goalsEl, classifyStatus(g.done, g.total));
     setPillStatus(stackEl, classifyStatus(s.done, s.total));
     setPillStatus(waterEl, classifyStatus(w.done, w.total));
+
+    const watchCountEl = document.getElementById('topbarWatchCount');
+    if (watchCountEl) watchCountEl.textContent = getWatchProgress().text;
   }
 
   // -------- Water +1 (works from any page) --------
