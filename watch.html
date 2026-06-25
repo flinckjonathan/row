@@ -893,21 +893,34 @@ document.getElementById('copyURL').addEventListener('click', function() {
 });
 
 // ── Pull Shortcut data from Supabase ────────────────────────────
+function setSub(msg) { document.getElementById('dashSub').textContent = msg; }
+
 async function mergeShortcutData() {
-  if (!window.supabase) return;
+  if (!window.supabase) { setSub('Supabase not loaded'); return; }
   try {
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const { data } = await supa
+    const { data, error } = await supa
       .from('app_state').select('data,updated_at')
       .eq('key','watch_in').maybeSingle();
-    if (!data || !data.data) return;
+
+    if (error) { setSub('Sync error: ' + error.message); return; }
+    if (!data)  { setSub('No Watch data in Supabase yet — run your Shortcut'); return; }
+
+    let inc = data.data;
+    if (typeof inc === 'string') { try { inc = JSON.parse(inc); } catch(e) {} }
+    if (!inc || typeof inc !== 'object') { setSub('Watch data format error: data is ' + typeof data.data); return; }
 
     const lastSynced = localStorage.getItem(IN_KEY);
-    if (lastSynced === data.updated_at) return;
+    if (lastSynced === data.updated_at) {
+      setSub('Watch synced · ' + new Date(data.updated_at).toLocaleTimeString());
+      return;
+    }
 
-    const inc = data.data;
-    const ds  = inc.date || todayStr();
-    if (ds !== todayStr() && ds !== dateStr(-1)) return;
+    const ds = inc.date || todayStr();
+    if (ds !== todayStr() && ds !== dateStr(-1)) {
+      setSub('Watch data is from ' + ds + ' (not today/yesterday)');
+      return;
+    }
 
     const patch = {};
     if (inc.steps)      patch.steps      = Number(inc.steps);
@@ -916,20 +929,24 @@ async function mergeShortcutData() {
     if (inc.restHR)     patch.restHR     = Number(inc.restHR);
     if (inc.bedtime)    patch.bedtime    = inc.bedtime;
     if (inc.wake)       patch.wake       = inc.wake;
-    if (!Object.keys(patch).length) return;
+
+    if (!Object.keys(patch).length) {
+      setSub('Watch data arrived but all fields empty — check Shortcut values: steps=' + inc.steps + ' sleep=' + inc.sleepHours);
+      return;
+    }
 
     patchLog(ds, patch);
     localStorage.setItem(IN_KEY, data.updated_at);
     render();
     document.getElementById('dashSub').innerHTML = '<span class="sync-badge">Synced from Watch</span>';
-  } catch(e) {}
+  } catch(e) {
+    setSub('Sync exception: ' + e.message);
+  }
 }
 
 // ── Boot ────────────────────────────────────────────────────────
 render();
-mergeShortcutData();
-
-document.getElementById('dashSub').textContent = viewLabel();
+mergeShortcutData(); // async — sets dashSub to diagnostic when done
 
 document.addEventListener('DOMContentLoaded', function() {
   if (typeof initCloudSync !== 'function') return;
